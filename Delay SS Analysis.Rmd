@@ -1,0 +1,38 @@
+---
+title: "Delay SS Analysis"
+author: "Dirk Cotton"
+date: "12/5/2017"
+output:
+  word_document: default
+  html_document: default
+---
+
+A reader has proposed that we calculate a required rate of return for a portfolio such that a retiree could claim benefits at age 62, invest the benefit payments and then purchase a single-premium income annuity (SPIA) at age 70. Alternatively, the retiree could delay claiming Social Security benefits until age 70 to increase the benefit. What minimum required rate of return would make these two cash flows "equivalent?"
+
+(Sounds like a question from a finance final exam, right?)
+
+Let's evaluate the cash flows for two periods, age 62-69 and age 70 onward. At age 70, the retiree would either purchase an immediate annuity to supplement the benefit claimed at age 62 or, in the alternative case, claim a higher Social Security benefit at age 70.
+
+# The Early Years of the Early-Claiming Strategy
+
+In the early-claim strategy, the retiree saves every benefit payment but, assuming the benefits are needed to pay expenses, an equivalent amount must be spent from savings. The bills still have to be paid. (If benefits aren't needed to meet expenses the analysis doesn't make sense.) In this strategy, each payout will be invested when received and an equal amount will be spent from the savings portfolio.
+
+This may sound like a wash, but taxation is different and spending fixed amounts periodically from a volatile portfolio introduces sequence of returns risk and increases the cost of funding (see A 4% Rule...). Sequence risk is highest at this point early in retirement.
+
+If the portfolio spending comes from an IRA or 401*(k)*, it will be taxed at ordinary income rates even if it results from selling stocks.
+
+Let's assume this is a two-person household and to make the explanation easier to understand, let's assume that at 62 the household will receive a $25,000 annual retirement benefit plus a $12,500 spousal benefit for a total of $37,500. From age 62-69, the household will receive $37,500 each year in benefits and immediately invest them. It will simultaneously sell $37,500 worth of stocks and pay ordinary income tax rates on that amount.
+
+# The Early Years of the Late-Claiming Strategy
+
+With the late-claiming strategy, the same cash flows apply to portfolio spending.
+
+
+
+
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+

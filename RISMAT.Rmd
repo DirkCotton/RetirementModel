@@ -1,0 +1,851 @@
+---
+output:
+  word_document: default
+  pdf_document: default
+  html_document: default
+---
+
+
+# Retirement Finance Simulation Model
+
+```{r echo=FALSE,warning=FALSE}
+load("~/Desktop/RetirementModelData.RData") 
+# install required packages if not already installed
+packages <- c("ggplot2", "scales", "reshape2","knitr")
+if (length(setdiff(packages, rownames(installed.packages()))) > 0) {
+  install.packages(setdiff(packages, rownames(installed.packages())))  
+}
+library(ggplot2)
+library(scales)
+library(reshape2)
+library(matrixStats)
+source('~/R Projects/RetirementModel/RetirementPkg.R') # load user-defined functions
+
+```
+
+
+
+```{r setup, include=FALSE,warning=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+# Client: Butts
+
+`r date()`
+
+`r options(scipen=999)`
+
+~~
+
+# How to Interpret This Report (And How Not To)
+
+This Monte Carlo simulation is primarily based on life expectancies (each scenario uses a random life expectancy generated from a life expectancy distribution) and capital market expectations (randomized market returns, interest rates and inflation rates based on historical distributions). As such, there are certain areas in which the simulation will excel but there are other areas in which its predictions are quite limited. As you review this report, it is critical that you understand the level of confidence you should have in various aspects of the results, specifically:
+
+1. Although the simulations characterize thousands of possible outcomes, your retirement will be a one-time event and we don't know which simulated scenario will be similar to the one you will experience or if any will be. These Monte Carlo simulations are far better at exposing the range of possible outcomes than their probabilities. This is important data to use to protect yourself from many of the worst outcomes the simulation will expose but you should have far less confidence in the probabilities of those outcomes occurring. Very good and very bad outcomes are probably higher than the simulation suggests, perhaps significantly higher.
+
+2. This simulation explores financial risk and longevity risk (how long you will live). Research shows that elder bankruptcy, however, results far more often from other factors such as medical expenses, divorce, and fraud than from market risk. Bankruptcies due to investment losses are rarely reported. Unfortunately, these primary causes of elder bankruptcy are diffiuclt to model. So, while simulations based on longevity and financial risk may show that, for instance, you have a 5% probability of outliving your savings, your risk is actually much higher when these extraneous risks are included. You should understand that Monte Carlo simulations, including this one, only predict part of your risk of catastrophic outcomes.
+
+3. While it is important to understand the probability of bad outcomes, it is also important to understand the magnitude of potential loss from those risks and to protect yourself from worst-case outcomes. The probability of dying while skydiving might be quite low, for example, but the outcome when you do is catastrophic. In addition to Monte Carlo simulations, you should consider the worst-case outcomes separately. These are known as "tail risks" and they occur in real life at a much higher frequency than the normal distribution typically used in Monte Carlo simulations would suggest.
+
+4. Monte Carlo simulations, including this one, typically assume the historical mean and variance of market returns, inflation and interest rates. This is our best guess of future returns but it isn't a particularly good one. We don't know the underlying return of the stock market, whether there is one, or whether it changes over time. We don't even know the distribution or returns so we have to acknowledge that market returns are not only volatile but uncertain. We should have low confidence that Monte Carlo simulations predict future market returns with any degree of accuracy.
+
+Monte Carlo simulation exposes a lot of information about our retirement finance prospects but is not clairivoyant. It should be considered one piece of relevant information for retirement planning but should be supplemented with analysis of worst-case outcomes that are unlikely to be simulated due to their low probability. In other words, retirement planning should consider the low probability of a skydiving accident but also what happens should that low-probability outcome come true.
+
+
+~~
+
+# Section 1. Simulation Parameters
+
+The first section of this report identifies the parameters used for the simulation.
+
+NOTE THAT ALL RESULTS AND INPUT PARAMETERS ARE EXPRESSED IN REAL (TODAY'S) DOLLARS. Assets with no inflation protection will show a decline in value over time based on simulated inflation rates.
+
+Parameters for the simulations are as follows:
+
+* Run `r paste(prettyNum(nscen,scientific=FALSE,big.mark=","))` scenarios.
+* Demographic data
+    + Husband's current age is `r husbandAge`.
+    + Wife's current age is `r wifeAge`.
+* Social Security data
+    + Husband claims at age `r husbandClaimAge`
+    + Wife claims at age `r wifeClaimAge`.
+    
+    + All claiming options:
+    `r knitr::kable(12 * ssBenefits,format="markdown")`
+    
+    
+* Portfolio parameters
+    + Initial portfolio balance before annuity purchase is `r paste("$",prettyNum(saveInitPort,scientific=FALSE,big.mark=","))`.
+    + Equity allocations randomized from `r round(100*min(equityAllocation))`% to `r round(100*max(equityAllocation))`%.
+* Market and inflation parameters
+    + Annual average rate of inflation is `r round(inflation*100,4)`%.
+    + Inflation rate annual standard deviation is `r round(inflationSd*100,4)`%.
+    + Risk-free real return rate is `r round(100*rf,4)`%. 
+    + Equity risk premium is `r round(100*rp,4)`%. 
+    + Standard deviation of annual market returns is `r round(100*mrSd,4)`%.
+* Immediate Annuity (SPIA) parameters
+    + SPIA Purchase age is `r purchaseAgeSPIA`
+    + Age of annuitant when payments will begin is `r annuityStartAge`.
+    + Annuity is inflation-protected is `r inflationProt`.
+    + Husband owns Annuity is `r as.logical(spiaOwnerisHusband)`.
+    + Percent of benefit that goes to survivor is `r round(100*survBenefit,2)`%.
+    + SPIA payout rate is `r round(100*annuityPayout,2)`%.
+    + SPIA allocation as percent of initial portfolio randomized from `r round(100*min(spiaAllocation),2)`% to `r round(100*max(spiaAllocation),2)`% in 10% increments.
+    
+* Deferred Income Annuity (DIA) parameters
+    + DIA Purchase age is `r purchaseAgeDIA`
+    + Age of annuitant when payments will begin is `r startAgeDIA`.
+    + Annuity is inflation-protected is `r inflationProtDIA`.
+    + Husband owns Annuity is `r as.logical(diaOwnerisHusband)`.
+    + Percent of benefit that goes to survivor is `r round(100*survivorPercentDIA,2)`%.
+    + DIA payout rate is `r round(100*diaPayout,2)`%.
+    + DIA allocation as percent of initial portfolio randomized from `r round(100*min(diaAllocation),2)`% to `r round(100*max(diaAllocation),2)`% in 10% increments.
+* Spending parameters
+    + Expected spending year one of retirement randomized from `r paste("$",prettyNum(min(spendLevels),scientific=FALSE,big.mark=","))` to `r paste("$",prettyNum(max(spendLevels),scientific=FALSE,big.mark=","))`.
+    + Percent expense decline after death of first spouse is `r round(100*survivorExpense,2)`%.
+    + Expenses typically decline `r round(100*annualAdjust,2)`% annually throughout retirement.
+    + Desired safety net (floor) spending is `r desiredSafetyNet`
+
+* Reserve Fund
+  + A reserve fund of `r paste("$",prettyNum(reserve,scientific=FALSE,big.mark=","))` is withdrawn from the portfolio and invested in an 80% equity portfolio. 
+
+* HECM Line of Credit
+    + Home appreciation rate is `r round(100*housingAppreciation,2)`% annually.
+    + Initial HECM Line of Credit available is `r paste("$",prettyNum(initLoc,scientific=FALSE,big.mark=","))`
+    + Initial Reverse Mortgage Balance is `r paste("$",prettyNum(initMort,scientific=FALSE,big.mark=","))`
+    + Home Market Value (no real annual growth assumed) is `r paste("$",prettyNum(homeMarketVal,scientific=FALSE,big.mark=","))`
+    + Mean long term return for 1-yr Libor=  `r round(100*liborMean,2)`% with standard deviation= `r round(100*liborSigma,2)`%
+    + HECM line of credit's maximum lifetime interest rate cap `r round(100*maxRate,2)`%
+    + HECM line of credit's margin added to Libor Index for variable rate loan `r round(100*marginHECM,2)`%
+    + HECM line of credit's Monthly Insurance Premium percentage `r round(100*percentMIP,2)`%
+    
+~~
+
+# Section 2. Graphs of Simulation Parameters
+
+Section 2 of this report graphically displays key simulation input parameters.
+    
+Life expectancies for husband and wife are plotted below.
+
+```{r echo=FALSE,warning=FALSE}
+probSurvive1only <- colMeans(states == 1)
+probSurvive2only <- colMeans(states == 2)
+
+probSurviveBoth <- colMeans(states == 3)
+probSurviveAll <- rbind(probSurvive1only,probSurvive2only,probSurviveBoth)
+
+plotMortTable(probSurviveAll,plotGen)
+
+```
+
+
+~~
+The following annual market returns were simulated.
+
+```{r echo=FALSE,warning=FALSE}
+ mr.df <- data.frame(as.vector((market.rmsM-1)*100))
+          colnames(mr.df) <- "Returns"
+          
+            print(
+              ggplot(data=mr.df, aes(mr.df$Returns)) + 
+                geom_histogram(binwidth=1, 
+                               col="blue", 
+                               fill="blue", 
+                               alpha = .2) + 
+                xlim(-40,60) +
+                labs(x="Simulated Market\nReturns (%)", y="Count")  +
+                ggtitle(paste("Figure 2. Histogram of \nSimulated Annual Real Market Returns")) 
+                
+            )
+```
+
+Arithmetic Mean of Simulated Annual Returns = `r round(100*(mean(market.rmsM)-1),3)`%.
+
+Standard Deviation of Simulated Annual Returns = `r round(100*(sd(market.rmsM)),3)`%.
+
+~~The following simulated annual inflation rates were simulated:
+
+```{r echo=FALSE,warning=FALSE}
+        if.df <- data.frame(as.vector((market.csM-1)*100))
+              colnames(if.df) <- "Inflation"
+                            
+              print(
+                ggplot(data=if.df, aes(if.df$Inflation)) + 
+                  geom_histogram(binwidth=.1, 
+                                 col="blue", 
+                                 fill="blue", 
+                                 alpha = .2) + 
+                  xlim(-2,6) +
+                  labs(x="Simulated Inflation Rates", y="Count")  +
+                  ggtitle(paste("Figure 3. Histogram of \nSimulated Annual Inflation Rates")) 
+              )            
+```
+
+* Arithmetic Mean of Simulated Inflation Rates = `r round(100*(mean(market.csM)-1),3)`%.
+
+* Standard Deviation of Simulated Annual Inflation Rates = `r round(100*(sd(market.csM)),3)`%.
+
+~~
+
+The following graph shows the number of scenarios that were simulated at various first-year spending rates. The x-axis also displays the range of first-year spending that was simulated. 
+
+The minimum first-year spending simulated was `r paste("$",prettyNum(min(spendM[,1]),scientific=FALSE,big.mark=","))`.
+
+The maximum first-year spending simulated was `r paste("$",prettyNum(max(spendM[,1]),scientific=FALSE,big.mark=","))`.
+
+```{r echo=FALSE,warning=FALSE}
+ea.df <- data.frame(spendM[,1])
+colnames(ea.df) <- "value"
+
+print(
+  ggplot(data=ea.df, aes(ea.df$value)) + 
+    geom_histogram(binwidth=100, 
+                   col="blue", 
+                   fill="blue", 
+                   alpha = .2) + 
+    labs(x="First-Year Spending", y="Number of Scenarios")  +
+    scale_x_continuous(labels = scales::comma) +
+    ggtitle(paste("Figure 4. Histogram of First-Year Spending for\n",paste(prettyNum(n,scientific=FALSE,big.mark=",")),"Scenarios")) 
+)
+```
+
+~~The graphs that follow are intended to show the range of inputs used by the simulation model (for example, the range of spending tested) and the distributions of the input parameters (for example, life expectancy follows a Gompertz distribution, while spending parameters are randomized with a uniform distribution.)
+
+The following chart shows the number of scenarios simulated at each level of annuity (SPIA) allocation as a percent of initial portfolio value. The *x*-axis shows the range of SPIA allocations simulated.
+
+```{r echo=FALSE,warning=FALSE}
+sA <- data.frame(spiaAllocation)
+  ggplot(data=sA, aes(sA$spiaAllocation)) +
+  geom_histogram(binwidth=.05,col="blue", 
+                     fill="blue", 
+                     alpha = .2) +
+  labs(title=paste("Figure 5. Histogram of SPIA Allocations\nfor",paste(prettyNum(n,scientific=FALSE,big.mark=",")),"Scenarios"),x="Allocation of Initial Portfolio Balance to SPIA Purchase") +
+  scale_x_continuous(labels = scales::percent)
+```
+
+~~
+The following chart shows the number of scenarios simulated at each level of deferred income annuity (DIA) allocation as a percent of initial portfolio value. The *x*-axis shows the range of DIA allocations simulated.
+
+```{r echo=FALSE,warning=FALSE}
+dA <- data.frame(diaAllocation)
+  ggplot(data=dA, aes(dA$diaAllocation)) +
+  geom_histogram(binwidth=.05,col="blue", 
+                     fill="blue", 
+                     alpha = .2) +
+  labs(title=paste("Figure 5a1. Histogram of DIA Allocations\nfor",paste(prettyNum(n,scientific=FALSE,big.mark=",")),"Scenarios"),x="Allocation of Initial Portfolio Balance to DIA Purchase") +
+  scale_x_continuous(labels = scales::percent)
+```
+
+
+~~The following chart shows the number of scenarios simulated at each level of equity allocation. The *x*-axis shows the range of equity allocations simulated.
+
+
+```{r echo=FALSE,warning=FALSE}
+ea.df <- data.frame(equityAllocation*100)
+colnames(ea.df) <- "Equity"
+
+  print(
+    ggplot(data=ea.df, aes(ea.df$Equity)) + 
+      geom_histogram(binwidth=10, 
+                     col="blue", 
+                     fill="blue", 
+                     alpha = .2) + 
+      labs(x="Equity Allocation (%)", y="Count")  +
+      ggtitle(paste("Figure 5a. Histogram of Equity Allocations for\n",paste(prettyNum(n,scientific=FALSE,big.mark=",")),"Scenarios")) +
+      scale_x_discrete(limit = seq(0,100,10))
+  )
+```
+~~
+
+# Section 3. Results of Simulations
+
+Section 3 provides the results of the simulation.
+
+## Statistics For Underfunded Scenarios
+
+
+* `r scenUnmetSpend` scenarios with unmet spending  or `r pcScenUnmet`%
+* Some failed scenarios were almost completely funded, while some funded scenarios were just barely funded. These scenarios fall within the margin of error.
++ Percent of scenarios that funded less than 95% of years `r round(length(percentFunded[percentFunded < 0.95])/n,4)*100`%
+* Number of years with unmet spending `r yrsUnmetSpend`
+* Mean years with unmet spending when spending not met `r paste(prettyNum(round(meanYrsUnmetSpend,0),scientific=FALSE,big.mark=","))`
+* Depleted portfolios `r pcDepletedPorts` %
+* Scenarios depleting HECM Line of Credit `r sum(depletedHECM)` or `r pcDepletedLOC`%
+
+~~Following is a histogram showing spending amounts (and the range of spending along the *x*- axis) for the first year of each retirement scenario. 
+
+This histogram shows the cumulative ratio of underfunded simulated scenarios by the amount of spending for the first year of retirement. The right-most column, for example, shows that 100% of `r scenUnmetSpend` unfunded scenarios had spending in the first year of retirement of `r paste("$",prettyNum(max(initspend[unmetSpendIndex]),scientific=FALSE,big.mark=","))` or less. The column to its left shows that about 80% of all `r scenUnmetSpend` unfunded scenarios had spending in the first year of retirement of `r paste("$",prettyNum(quantile(initspend[unmetSpendIndex],0.8),scientific=FALSE,big.mark=","))` or less. 
+
+About half of the `r scenUnmetSpend` underfunded scenarios in this simulation could have been funded by spending less than `r paste("$",prettyNum(quantile(initspend[unmetSpendIndex],0.5),scientific=FALSE,big.mark=","))` from the beginning of retirement.
+
+If an empty chart appears below, then there were no underfunded scenarios.
+
+```{r echo=FALSE,warning=FALSE}
+
+  # Plot spending levels for unmet spending and met-spending scenarios
+    hist(initspend[rowSums(round(totalSpending-expenses)) != 0],plot=FALSE,breaks=unique(initspend)) -> h # do a histogram of y and assign its info to h
+    h$counts <- cumsum(h$counts)/sum(h$counts) # replace the cell freq.s by cumulative freq.s
+    # sum(h$counts)
+    dd <- h$mids
+    d2 <- h$counts
+    spendData <- data.frame(dd,d2)
+    ggplot(data=spendData, aes(dd,d2)) + 
+      geom_bar(stat="identity",
+               col="blue", 
+               fill="blue", 
+               alpha = .2) + 
+      labs(x="Spending First Year of Retirement", y="Cumulative Percent of Underfunded Years")  +
+      scale_y_continuous(labels=scales::percent) +
+      ggtitle(paste("Figure 6. Cumulative Histogram of Underfunded\nScenarios by First-Year Spending")) 
+
+```
+~~Following is a cumulative histogram showing the equity allocation for `r length(underfundedyears)` underfunded *scenarios*. If no chart appears below, then there were no underfunded years.
+
+```{r echo=FALSE,warning=FALSE}
+# Plot cumulative Equity allocation levels for unmet spending 
+if (length(unique(equityAllocation)) > 1) {
+  
+  h <- hist(equityAllocation[unmetSpendIndex > 0],plot=FALSE,breaks=unique(equityAllocation)) # do a histogram of y and assign its info to h
+  h$counts <- cumsum(h$counts)/sum(h$counts) # replace the cell freq.s by cumulative freq.s
+  # sum(h$counts)
+  dd <- h$mids
+  d2 <- h$counts
+  equityData <- data.frame(dd,d2)
+  print(
+    ggplot(data=equityData, aes(dd,d2)) + 
+      geom_bar(stat="identity",
+               col="blue", 
+               fill="blue", 
+               alpha = .2) + 
+      labs(x="Equity Allocation", y="Cumulative Percent of Underfunded Scenarios")  +
+      scale_y_continuous(labels=scales::percent) +
+      scale_x_continuous(labels=scales::percent) + 
+      ggtitle(paste("Figure 7. Equity Allocation. Cumulative Histogram of\n",paste(prettyNum(length(unmetSpendIndex),scientific=FALSE,big.mark=",")),"Underfunded Scenarios.")) 
+  )
+}
+```
+
+
+
+~~Following is a histogram showing the equity allocation for `r length(underfundedyears)` underfunded *years*. If no chart appears below, then there were no underfunded years.
+
+```{r echo=FALSE,warning=FALSE}
+if (sum(unSpendingYrs > 0) > 2 ) { 
+  ea.df <- data.frame(equityAllocation[unSpendingYrs > 0]*100)
+  colnames(ea.df) <- "Equity"
+  print(
+    ggplot(data=ea.df, aes(ea.df$Equity)) + 
+      geom_histogram(binwidth=5, 
+                     col="blue", 
+                     fill="blue", 
+                     alpha = .2) + 
+      labs(title="Histogram for Age") +
+      labs(x="Equity Allocation (%)", y="Count")  +
+      ggtitle(paste("Figure 7a. Histogram of Equity Allocations for\n",paste(prettyNum(sum(unSpendingYrs),scientific=FALSE,big.mark=",")),"Underfunded Years")) +
+      scale_x_discrete(limit = seq(0,100,10))
+  )
+  
+}
+```
+~~Following is a cumulative histogram of SPIA annuity allocations for the `r length(unmetSpendIndex)` scenarios with unmet spending.
+
+No plot is generated when a single annuity allocation is selected, which is `r (length(unique(spiaAllocation)) < 2)` for this simulation.
+
+
+```{r echo=FALSE,warning=FALSE}
+
+# Plot SIA allocation levels for unmet spending and met-spending scenarios
+if (length(unique(spiaAllocation)) > 1) {
+  
+  h <- hist(spiaAllocation[rowSums(round(totalSpending-expenses)) != 0],plot=FALSE,breaks=unique(spiaAllocation)) # do a histogram of y and assign its info to h
+  h$counts <- cumsum(h$counts)/sum(h$counts) # replace the cell freq.s by cumulative freq.s
+  # sum(h$counts)
+  dd <- h$mids
+  d2 <- h$counts
+  annuityData <- data.frame(dd,d2)
+  print(
+    ggplot(data=annuityData, aes(dd,d2)) + 
+      geom_bar(stat="identity",
+               col="blue", 
+               fill="blue", 
+               alpha = .2) + 
+      labs(x="SPIA Allocation", y="Cumulative Percent of Underfunded Scenarios")  +
+      scale_y_continuous(labels=scales::percent) +
+      scale_x_continuous(labels=scales::percent) + 
+      ggtitle(paste("Figure 7b. Cumulative Histogram of Underfunded\nScenarios by SPIA Allocation")) 
+  )
+}
+```
+
+~~Following is a cumulative histogram of DIA annuity allocations for the `r length(unmetSpendIndex)` scenarios with unmet spending.
+
+No plot is generated when fewer than two DIA allocations are tested, which is (`r (length(unique(diaAllocation)) == 1)`) for this simulation.
+
+```{r echo=FALSE,warning=FALSE}
+
+# Plot DIA allocation levels for unmet spending and met-spending scenarios
+if (length(unique(diaAllocation)) > 1) {
+  
+  h <- hist(diaAllocation[rowSums(round(totalSpending-expenses)) != 0],plot=FALSE,breaks=unique(diaAllocation)) # do a histogram of y and assign its info to h
+  h$counts <- cumsum(h$counts)/sum(h$counts) # replace the cell freq.s by cumulative freq.s
+  # sum(h$counts)
+  dd <- h$mids
+  d2 <- h$counts
+  annuityData <- data.frame(dd,d2)
+  print(
+    ggplot(data=annuityData, aes(dd,d2)) + 
+      geom_bar(stat="identity",
+               col="blue", 
+               fill="blue", 
+               alpha = .2) + 
+      labs(x="DIA Allocation", y="Cumulative Percent of Underfunded Scenarios")  +
+      scale_y_continuous(labels=scales::percent) +
+      scale_x_continuous(labels=scales::percent) + 
+      ggtitle(paste("Figure 7c. Cumulative Histogram of Underfunded\nScenarios by DIA Allocation")) 
+  )
+}
+```
+
+
+
+~~Following is a histogram of 95th percentile terminal net worth (portfolio value plus home equity at death of the second spouse). The largest 5% of terminal net worth values are excluded because they are highly unlikely and distort the graph.
+
+```{r echo=FALSE,warning=FALSE}
+
+tpv95 <- termNetWorth/1000000
+tpv95 <- tpv95[tpv95 <= quantile(tpv95,.95)]
+tpv.df <- data.frame(tpv95)  # plot terminal net worth in $M
+colnames(tpv.df) <- "TNW"
+histdata <- hist(tpv95,plot=FALSE)
+maxCount <- max(histdata$counts)
+
+print(
+  ggplot(data=tpv.df, aes(tpv.df$TNW))  +
+    geom_histogram(
+      col="blue",
+      fill="blue",
+      alpha = .2) +
+
+    labs(x="Terminal Net Worth ($M)", y="Number of Scenarios")  +
+    ggtitle("Figure 8. Histogram of Terminal Networth\nto 95th %-ile") 
+  
+) 
+
+```
+
+* Mean Terminal Net Worth = `r paste("$",prettyNum(round(mean(termNetWorth),0),scientific=FALSE,big.mark=","))`.
+
+* 5% of Terminal Net Worth values fell below `r paste("$",prettyNum(round(quantile(termNetWorth,.05)),scientific=FALSE,big.mark=","))`.
+* 10% of Terminal Net Worth values fell below `r paste("$",prettyNum(round(quantile(termNetWorth,.1)),scientific=FALSE,big.mark=","))`.
+* 25% of Terminal Net Worth values fell below `r paste("$",prettyNum(round(quantile(termNetWorth,.25)),scientific=FALSE,big.mark=","))`.
+* 50% of Terminal Net Worth values (the median) fell below `r paste("$",prettyNum(round(quantile(termNetWorth,.5)),scientific=FALSE,big.mark=","))`.
+
+~~
+
+The following graph shows a histogram of terminal portfolio values (TPVs). The best 5% of TPVs are eliminated for this graph because a) they are highly improbable, b) they distort the graph and c) if they did occur, they would be excellent outcomes and not a downside risk.
+
+
+```{r echo=FALSE,warning=FALSE}
+
+tpv295 <- termPortValue/1000000
+tpv295 <- tpv295[tpv295 <= quantile(tpv295,.95)]
+tpv2.df <- data.frame(tpv295)  # plot terminal net worth in $M
+colnames(tpv2.df) <- "TPV"
+
+tpvMax <- quantile(tpv2.df$TPV,.95)
+
+print(
+  plt <- ggplot(data=tpv2.df, aes(tpv2.df$TPV))  +
+    geom_histogram(col="blue",
+                   fill="blue",
+                   alpha = .2) +
+    labs(x="Terminal Portfolio Value ($M)", y="Number of Scenarios")  +
+    # scale_y_continuous( limits = c(0,400), expand = c(0,0) ) +
+    ggtitle("Figure 8a. Histogram of TPVs to 95th %-ile") 
+  
+) 
+
+```
+
+* Mean Terminal Portfolio = `r paste("$",prettyNum(round(mean(termPortValue),0),scientific=FALSE,big.mark=","))`.
+
+* 5% of Terminal Portfolio values fell below `r paste("$",prettyNum(round(quantile(termPortValue,.05)),scientific=FALSE,big.mark=","))`.
+* 10% of Terminal Portfolio values fell below `r paste("$",prettyNum(round(quantile(termPortValue,.1)),scientific=FALSE,big.mark=","))`.
+* 25% of Terminal Portfolio values fell below `r paste("$",prettyNum(round(quantile(termPortValue,.25)),scientific=FALSE,big.mark=","))`.
+* 50% of Terminal Portfolio values (the median) fell below `r paste("$",prettyNum(round(quantile(termPortValue,.5)),scientific=FALSE,big.mark=","))`.
+
+```{r echo=FALSE,warning=FALSE}
+
+if (sum(unmetSpending) > 2) {
+  
+worst10scenarios <- order(unmetSpendIndex[annuityAllocation < 1], decreasing=TRUE)[1:10]
+best10scenarios <- order(termPortValue, decreasing=TRUE)[1:10]
+# find scenario with terminal portfolio value closest to median
+medScenario <- which(abs(termPortValue-median(termPortValue))==min(abs(termPortValue-median(termPortValue))))[1]  
+med <- data.frame(nw[medScenario,])
+med$year <- seq(1,65)
+nw <- cbind(saveInitPort,portfolioBalance)
+nw[states == 0] <- 0
+bw <- data.frame(rbind(nw[best10scenarios,],nw[worst10scenarios,],nw[medScenario,]))
+bw$scenario <- 1:21
+df <- data.frame(bw)
+
+df_melted <- melt(df,id.vars = "scenario")
+df_melted <- subset(df_melted, value !=0)
+levels(df_melted$variable) <- seq(0,64)
+colnames(med) <- c("Portfolio Value","Year of Retirement")
+
+print(
+  ggplot(data=df_melted, aes(x = variable, y = value,color=scenario,group=scenario)) + 
+    geom_line() +
+    
+    scale_x_discrete(breaks = scales::pretty_breaks()(1:56)) +
+    scale_y_continuous(labels= scales::comma, limits= c(0,4*saveInitPort)) +
+    theme(legend.position="none") +
+    labs(x="Year of Retirement", 
+         y="Year of Retirement",
+         title="Figure 8b.Ten Best and Worst TPV Paths",
+         subtitle="Exludes scenarios with 100% annuitization of portfolio.") +
+    annotate("text", x = tail(which(nw[medScenario,]!=0),1), y = termPortValue[medScenario], label = "median TPV")
+)
+}
+
+```
+
+The chart above shows the ten portfolio balance paths with the highest TPV, the ten paths with the earliest portfolio depletion and the path with the median Terminal Portfolio Value.
+
+The best paths are highly improbable and not critical in the sense that if your portfolio did take one of those paths the outcomes would be wonderful. The worst paths are also highly improbable but should be given more consideration because, while best path outcomes would be wonderful, worst path outcomes would destroy the retirement plan. A good plan will eliminate these worst-case outcomes.
+
+Though this graph shows 21 paths, the simulation actually generated `r n` hypothetical paths. Also note that the graph lines end when the last spouse dies.
+
+~~
+
+```{r echo=FALSE,warning=FALSE}
+plotData.df <- data.frame(percentFunded[percentFunded < 1] * 100)
+pdata <- ggplot (data=plotData.df,aes(plotData.df$percentFunded.percentFunded...1.)) +
+  geom_histogram(binwidth = 1,
+                 col="blue", 
+                 fill="blue", 
+                 alpha = .2) +
+
+  xlab("Percent of Years Funded in Underfunded Scenarios") + ylab("Number of Scenarios") +
+  ggtitle("Figure 9. Histogram of Percent of Years Funded\nfor Underfunded Scenarios") 
+
+print(pdata)
+
+```
+
+
+The graph above shows the `r length(underfundedyears)` years of retirement for which spending demand (consumption) was not met. If an empty chart appears above, then there were no underfunded years.
+
+The rightmost columns represent scenarios that were *mostly* funded. Leftmost columns represent scenarios that were *least* funded.
+
+```{r echo=FALSE,warning=FALSE}
+# if(scenUnmetSpend > 0){
+# hist(spendNotMet[!duplicated(spendNotMet[,1]),2],breaks=length(spendNotMet[!duplicated(spendNotMet[,1]),2]),xlab="Number of Years Spending Was Met",ylab="Number of Scenarios",main="Figure 10. Histogram of Number of Years \nSpending Demand Was Met \nin Failed Scenarios")
+# }
+```
+~~The following chart shows terminal home equity for all scenarios. If a HECM reverse mortgage is available, home equity can become negative but this is non-recourse debt and will not lower the household's terminal net worth.
+
+```{r echo=FALSE,warning=FALSE}
+  tpvHe.df <- data.frame(termHomeEquity/1000000)  # plot terminal net worth in $M
+  colnames(tpvHe.df) <- "THE"
+  
+  print(
+    ggplot(data=tpvHe.df, aes(tpvHe.df$THE))  +
+      geom_histogram(
+        col="blue",
+        fill="blue",
+        alpha = .2) +
+      labs(x="Terminal Home Equity ($M)", y="Number of Scenarios")  +
+      ggtitle("Figure 8b. Histogram of Terminal Home Equity") 
+    
+  ) 
+
+```
+
+
+~~
+
+The following chart shows which equity allocations produced the `r length(unmetSpendIndex)` underfunded scenarios. 
+
+```{r echo=FALSE,warning=FALSE}
+if (length(unmetSpendIndex) > 0) {
+ea.df <- data.frame(equityAllocation[unmetSpendIndex]*100)
+colnames(ea.df) <- "Equity"
+  print(
+  ggplot(data=ea.df, aes(ea.df$Equity)) + 
+  geom_histogram(binwidth=5, 
+                 col="blue", 
+                 fill="blue", 
+                 alpha = .2) + 
+  labs(title="Histogram for Age") +
+  labs(x="Equity Allocation (%)", y="Number of Underfunded Scenarios")  +
+  ggtitle(paste("Figure 12. Histogram of Equity Allocations for\n",paste(prettyNum(length(unmetSpendIndex),scientific=FALSE,big.mark=",")),"Underfunded Scenarios")) +
+  scale_x_discrete(limit = seq(0,100,10))
+  )
+}
+```
+
+~~
+
+# Floor Income
+
+The following three charts show safe (longevity-hedged) income (the "floor") by year of retirement when a) both spouses survive, b) the husband is the only survivor, and c) the wife is the only survivor. The dark red line shows the mean safe floor income for all scenarios for each year of retirement. The components of floor income are also listed in a table following these three graphs. 
+
+The blue line shows the client's desired "safety net" amount of floor spending. That desired level is shown in Figure 13a. In Figures 13b. and 13c. desired safe income is reduced by a third to reflect the decreased cost of living for a surviving spouse.
+
+Note that annuities and pensions that are not inflation-protected will lose value to inflation each year, as simulation results are all calculated in real dollars. This explains any downward trend of the dark red line as retirement progresses. Expenses are expressed in real dollars so that line does not trend downward over time.
+
+
+
+
+```{r echo=FALSE,warning=FALSE}
+
+if (household == 2) {
+
+# Plot a chart of mean safe floor income when both spouses are living 
+
+ydata <- floor
+
+is.na(ydata) <- states != 3 | ydata == 0   # set all floor data to NA when both spouse aren't alive of the min, max and mean calculations
+
+y <- colMeans(ydata,na.rm = TRUE)[!is.nan(colMeans(ydata,na.rm = TRUE))]  
+lb <- y[1:length(y)]
+ub <- y[1:length(y)]
+
+x <- 1:length(y)
+
+exp1 <- rep(desiredSafetyNet,length(y))  # graph only non-zero expenses (zero expenses are for states with no survivors)
+
+z <- exp1[1:length(y)]
+
+plotdataFloor <- data.frame(x=x, y=y, lower = lb, upper = ub,z)  # create data frame for plot
+
+print(
+  p <- ggplot(plotdataFloor) + geom_line(aes(y=y, x=x),color="darkred") +   # mean floor income available
+    geom_line(aes(y=z, x=x),color="blue") +      # desired floor spending
+    labs(title="Figure 13a. Safe Floor Income vs. Desired Floor\nBoth Spouses Living",subtitle="Mean and Range: Pensions, Annuities, Social Security (red)\nDesired Gloor Spending (blue)",x="Year of Retirement",y="Mean Floor Income for all Scenarios ($)") +
+    theme(legend.position="none") +  # remove legend
+    scale_y_continuous(labels = scales::comma) 
+)
+}
+
+```
+
+~~
+The following chart shows Safe Floor Income versus Mean Expenses for scenarios in which only the husband survives.
+
+```{r echo=FALSE,warning=FALSE}
+
+if (sum(states == 1) > 0 ) {    #  plot if there are any 1 states (husband survives)
+
+# Plot a chart of mean safe floor income when only husband survives
+
+ydata <- floor
+
+is.na(ydata) <- ydata==0 | states != 1   # set all floor data to NA when no one is alive to leave out of the min, max and mean calculations
+y <- colMeans(ydata,na.rm = TRUE)[!is.nan(colMeans(ydata,na.rm = TRUE))]      # find mean floor value (only when at least one survivor)
+
+# for(cc in length(y):1) {  # remove all columns from chart for which there were no survivors in any scenario
+#   if (is.na(y[cc])) {
+#     y <- y[1:(cc - 1 )]  
+#     lb <- lb[1:(cc - 1 )]
+#     ub <- ub[1:(cc - 1 )]
+#   }
+# }
+
+y <- y[1:length(y)]
+lb <- y[1:length(y)]
+ub <- y[1:length(y)]
+
+x <- 1:length(y)
+
+exp1 <- rep(desiredSafetyNet,length(y)) # graph only non-zero expenses (zero expenses are for states with no survivors)
+exp1 <- exp1  * survivorExpense
+
+z <- exp1  # reduce expenses from couples to single cost
+
+plotdataFloor <- data.frame(x=x, y=y, lower = lb, upper = ub,z)  # create data frame for plot
+
+print(
+  p <- ggplot(plotdataFloor) + geom_line(aes(y=y, x=x),color="darkred") +   # mean floor income available
+    geom_line(aes(y=z, x=x),color="blue") +      # mean total spending
+    labs(title="Figure 13b. Safe Floor Income vs. Desired Floor\nOnly Husband Survives",subtitle="Mean and Range: Pensions, Annuities, Social Security (red)\nDesired Floor Spending (blue)",x="Year of Retirement",y="Mean Floor Income for all Scenarios ($)") +
+    theme(legend.position="none") +  # remove legend
+    scale_y_continuous(labels = scales::comma) 
+)
+}
+
+```
+
+~~
+The following chart shows Safe Floor Income versus Mean Expenses for scenarios in which only the wife survives.
+
+```{r echo=FALSE,warning=FALSE}
+
+if (sum(states == 2) > 0)  {    #  plot if there are any 2 states (wife survives)
+
+# Plot a chart of mean safe floor income when only wife survives
+
+ydata <- floor
+
+is.na(ydata) <- ydata==0 | states != 2   # set all floor data to NA when no one is alive to leave out of the min, max and mean calculations
+y <- colMeans(ydata,na.rm = TRUE)[!is.nan(colMeans(ydata,na.rm = TRUE))]      # find mean floor value (only when at least one survivor)
+
+y <- y[1:length(y)]
+lb <- y[1:length(y)]
+ub <- y[1:length(y)]
+
+x <- 1:length(y)
+
+exp1 <- rep(desiredSafetyNet,length(y)) # graph only non-zero expenses (zero expenses are for states with no survivors)
+exp1 <- exp1  * survivorExpense
+
+z <- exp1  # reduce expenses from couples to single cost
+
+plotdataFloor <- data.frame(x=x, y=y, lower = lb, upper = ub,z)  # create data frame for plot
+
+print(
+  p <- ggplot(plotdataFloor) + geom_line(aes(y=y, x=x),color="darkred") +   # mean floor income available
+    geom_line(aes(y=z, x=x),color="blue") +      # mean total spending
+    labs(title="Figure 13c. Safe Floor Income vs. Desired Floor\nOnly Wife Survives",subtitle="Mean and Range: Pensions, Annuities, Social Security (red)\nDesired Floor Spending (blue)",x="Year of Retirement",y="Mean Floor Income for all Scenarios ($)") +
+    theme(legend.position="none") +  # remove legend
+    scale_y_continuous(labels = scales::comma) 
+)
+
+}
+```
+~~
+
+# Summary of Floor income 
+
+Summary floor income before inflation and after all pensions and Social Security payments begin.
+
+
+```{r echo=FALSE,warnings=FALSE}
+
+floorSummary <- matrix(0,8,3)
+colnames(floorSummary) <- c("Both Survive","Husband Survives","Wife Survives")
+rownames(floorSummary)<- c("Social Security Benefits","Wife's Pension","Wife's Pension (survivor)","Husband's Pension","Husband's Pension (survivor)","SPIA Income","DIA Income","TOTAL")
+
+if (husbandClaimAge == 62) hRow <- 1
+if (husbandClaimAge == 66 | husbandClaimAge == 67) hRow <- 2
+if (husbandClaimAge == 70) hRow <- 3
+
+if (wifeClaimAge == 62) wRow <- 1
+if (wifeClaimAge == 66 | wifeClaimAge == 67) wRow <- 2
+if (wifeClaimAge == 70) wRow <- 3
+
+# both survive
+floorSummary[1,1] <- 12 * (ssBenefits[hRow,1] + ssBenefits[wRow,2])
+floorSummary[2,1] <- wifePensionPayout
+floorSummary[3,1] <- 0
+floorSummary[4,1] <- husbandPensionPayout
+floorSummary[5,1] <- 0
+floorSummary[6,1] <- spiaAllocation[1] * saveInitPort * spiaPayout
+floorSummary[7,1] <- diaAllocation[1] * saveInitPort * diaPayout
+
+# husband survives
+floorSummary[1,2] <- 12 * ssBenefits[hRow,1] 
+floorSummary[2,2] <- 0
+floorSummary[3,2] <- wifePensionPayout * survivorPercentWpension
+floorSummary[4,2] <- husbandPensionPayout
+floorSummary[5,2] <- 0
+if (spiaOwnerisHusband){
+  floorSummary[6,2] <- spiaAllocation[1] * saveInitPort * spiaPayout 
+} else {
+  floorSummary[6,2] <- spiaAllocation[1] * saveInitPort * spiaPayout * survivorPercentSPIA
+}
+
+if (!spiaOwnerisHusband){
+  floorSummary[7,2] <- diaAllocation[1] * saveInitPort * diaPayout 
+} else {
+  floorSummary[7,2] <- diaAllocation[1] * saveInitPort * diaPayout * survivorPercentDIA
+}
+ 
+
+# wife survives
+floorSummary[1,3] <- 12 * ssBenefits[hRow,1] 
+floorSummary[2,3] <- wifePensionPayout
+floorSummary[3,3] <- 0
+floorSummary[4,3] <- 0
+floorSummary[5,3] <- husbandPensionPayout * survivorPercentHpension
+if (!spiaOwnerisHusband){
+  floorSummary[6,3] <- spiaAllocation[1] * saveInitPort * spiaPayout 
+} else {
+  floorSummary[6,3] <- spiaAllocation[1] * saveInitPort * spiaPayout * survivorPercentSPIA
+}
+
+if (spiaOwnerisHusband){
+  floorSummary[7,3] <- diaAllocation[1] * saveInitPort * diaPayout 
+} else {
+  floorSummary[7,3] <- diaAllocation[1] * saveInitPort * diaPayout * survivorPercentDIA
+}
+
+floorSummary[8,1] <- sum(floorSummary[,1])
+floorSummary[8,2] <- sum(floorSummary[,2])
+floorSummary[8,3] <- sum(floorSummary[,3])
+
+```
+ `r knitr::kable(floorSummary,format="markdown")`
+
+~~
+
+The last two charts of this report provide details for a single randomly-selected scenario, scenario number 
+
+The following chart shows cash flow for scenatrio number `r summarizeThis`. The black line shows consumption demanded. The colored areas indicate the source for funding that consumption. 
+
+Underfunded years will show that funding sources did not achieve demanded consumption -- the colored bars will not reach the black dots. When the colored bars exceed the black dots expenses for that year were exceeded by the safe floor income even without portfolio spending. The excess above the black dot is transferred to the savings portfolio.
+
+```{r echo=FALSE,warning=FALSE}
+
+plotData3 <- data.frame(pmax(0,spendFromPortfolio[summaryScenario,]),hecmSpend[summaryScenario,],socSecM[summaryScenario,],hPensionIncomeM[summaryScenario,],wPensionIncomeM[summaryScenario,],spiaIncomeM[summaryScenario,],diaIncomeM[summaryScenario,],tipsIncomeM[summaryScenario,],reserveSpend[summaryScenario,1:nyrs])
+
+plotData3$row <- seq_len(nrow(plotData3))
+plotYears <- survived[summaryScenario]  # number of years in this scenario with at least one survivor
+plotData3 <- plotData3[1:plotYears,]
+
+colnames(plotData3) <- c("Spend from Portfolio","Spend from HECM","Social Security","Pension (Husband)","Pension (Wife)","SPIA","DIA","TIPS Ladder","Reserves","rows")
+plotData2 <- melt(plotData3,id.vars = "rows")
+
+plotExpenses <- data.frame(expenses[summaryScenario,1:plotYears])
+ 
+plotExpenses$rows <- seq(1,plotYears) # replaced seq_len(nrow(plotExpenses))
+colnames(plotExpenses) <- c("Expenses","rows")
+plotExpenses <- melt(plotExpenses,id.vars = "rows")
+plotExpenses <- plotExpenses[1:plotYears,]
+
+library(ggplot2)
+
+print(ggplot(plotData2, aes(x=rows, y=value, fill=variable)) + 
+        geom_bar(stat="identity") +
+        geom_point(data=plotExpenses,aes(x=rows,y=value)) +
+        # theme(legend.position = c(.2,.2)) +
+        ggtitle (paste("Figure 17. Income Source vs. Expenses (black)\nScenario Number ",summaryScenario)) +
+        xlab("\nYear of Retirement") +
+        ylab("Annual $(Real) Income") +
+        scale_y_continuous(labels = scales::comma) +
+        labs(fill='Income Source') 
+)
+
+```
+~~
+
+```{r echo=FALSE,warning=FALSE}
+plotNetWorth <- data.frame(pmax(0,homeEquity[summaryScenario,]),swrM[summaryScenario,])
+plotNetWorth$rows <- seq_len(nrow(plotNetWorth))
+colnames(plotNetWorth) <- c("Home Equity","Portfolio Balance","rows")
+plotNetWorth2 <- reshape2::melt(plotNetWorth,id.vars = "rows")
+colnames(plotNetWorth2) <- c("rows","Net Worth","value")
+print(ggplot(plotNetWorth2, aes(x=rows, y=value, fill=`Net Worth`)) +
+        geom_bar(stat="identity") +
+      
+        ggtitle (paste("Figure 18. Net Worth Scenario Number ",summaryScenario)) +
+        xlab("\nYear") +
+        scale_y_continuous(labels = scales::comma) +
+        scale_x_continuous(limits=c(0,40)) +
+        ylab("Real Net Worth") 
+)
+
+```
+
