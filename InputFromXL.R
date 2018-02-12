@@ -3,6 +3,7 @@
 # IMPORTANT. Annuities that have already begun paying out should be entered as pensions so
 # their purchase prices isn't removed from savings
 
+ssBenefits <- matrix (0,3,2)
 csvInput <- read.csv(userDataFile,header=TRUE,stringsAsFactors = FALSE)
 csvInput[is.na(csvInput)] <- 0
 
@@ -46,3 +47,6 @@ ssBenefits[3,1] <- as.numeric(csvInput[37])
 ssBenefits[1,2] <- as.numeric(csvInput[38])
 ssBenefits[2,2] <- as.numeric(csvInput[39])
 ssBenefits[3,2] <- as.numeric(csvInput[40])
+
+wifeAge <- 66    # wife's age at start of simulation
+husbandAge <- 66 # husband's age at start of simulation

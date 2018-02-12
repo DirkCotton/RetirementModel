@@ -4,7 +4,9 @@ cat("\014")  # clear the console
 # rm(homeEquity,mortgageBalance,creditLimit,unmetSpending,hecmSpend,spendPort,portfolioBalance,liborM,marketVector,market.rmsM)
 
 # install required packages if not already installed
-
+require(ggplot2)
+require(knitr)
+if (require(matrixStats)) install.packages("matrixStats")
 
 ### not loading scales package
 
@@ -18,7 +20,9 @@ source('~/R Projects/RetirementModel/Summarize.R')
 source('~/R Projects/RetirementModel/Plot Graphs.R')
 source('~/R Projects/RetirementModel/BuildDiaM.R')
 source('~/R Projects/RetirementModel/BuildSpiaM.R')
+source('~/R Projects/RetirementModel/Build Soc Sec.R')
 source('~/R Projects/RetirementModel/Survivors V3.R')
+source('~/R Projects/RetirementModel/Find FRA.R')
 
 source('~/R Projects/RetirementModel/PensionHusband.R')
 source('~/R Projects/RetirementModel/PensionWife.R')
@@ -117,7 +121,7 @@ initspend <- round(initspend)
 states <- mortalityStates(n,husbandAge,wifeAge,plotGen=TRUE)
 
 totalSurvivedYears <- sum(states[states >0 & states < 4])  # number of combined years of life for both spouses all scenarios
-cat("\nNumber of combined years of life for both spouses in all scenarios",totalSurvivedYears)
+
 survived <- which(states==4,arr.ind=TRUE)   # build column vector of number of years in each scenario with at least one survivor
 survived <- survived[order(survived[,1]),]    # order by scenario number to match other data structures
 survived <- survived[,2] - 1
@@ -348,6 +352,7 @@ liborM <- matrix(rnorm(nscen*nyrs,.02,.01),nscen,nyrs)
   depletedHECM <- rep(FALSE,scenarios) # Note when HECM LOC depleted
   depletedPort <- rep(FALSE,scenarios) # Note when portfolio depleted
   termHomeEquity <- rep(0,scenarios) # save terminal Home Equity in this vector
+  termNetWorth <- rep(0,scenarios)
   termPortValue <- rep(0,scenarios) # save terminal Portfolio Value (TPV) in this vector
   reserveTPV <- rep(0,scenarios) # save reserve fund terminal Portfolio Value (TPV) in this vector
   unmetSpending <- rep(FALSE,scenarios) # save unmet spending scenario first year
@@ -520,7 +525,7 @@ if (printSummary == TRUE) {
   cat("\nMean withdrawal rate for all scenarios =  ",round(100*nzmean,2),"% per year.",sep=" ")
 }
 
-parms <- data.frame(marginHECM,percentMIP,annualAdjust,initportfolio,initLoc,initMort,survivorExpense,survBenefit,wifeClaimAge,husbandClaimAge,wifeAge,husbandAge,loEarnerOwnBenefit,hiEarnerOwnBenefit,annuityStartAge,annualAdjust,maxRate)
+parms <- data.frame(marginHECM,percentMIP,annualAdjust,initportfolio,initLoc,initMort,survivorExpense,wifeClaimAge,husbandClaimAge,wifeAge,husbandAge,annuityStartAge,annualAdjust,maxRate)
 write.csv(parms,"~/desktop/Parms.csv")
 
 totUnmetSpndYrs <- rowSums(round(totalSpending - expenses) != 0)

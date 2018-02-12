@@ -306,6 +306,8 @@ if (yrsUnmetSpend > 0) {      # skip all analysis if there are no scenarios in w
   if (plotGen) plot(d,a,main=paste("Number of Unmet Spending Years\nby Equity Allocation"),xlab="Equity Allocation",ylab="Unmet Spending Years")
   if (plotGen) plot(d,a,main=paste("Number of Unmet Spending Years\nby Combined Lifetimes"),xlab="Combined Lifetimes",ylab="Unmet Spending Years")
   
+  underfundedyears <- unSpendingYrs[unSpendingYrs > 0] # vector of number of years failed for each failed scenario
+  
   if (plotGen) { 
   unmetEa <- equityAllocation[unSpendingYrs > 0] # vector if the equity allocation for every failed scenario
   underfundedyears <- unSpendingYrs[unSpendingYrs > 0] # vector of number of years failed for each failed scenario

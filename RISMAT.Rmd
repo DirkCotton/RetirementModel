@@ -85,10 +85,10 @@ Parameters for the simulations are as follows:
 * Immediate Annuity (SPIA) parameters
     + SPIA Purchase age is `r purchaseAgeSPIA`
     + Age of annuitant when payments will begin is `r annuityStartAge`.
-    + Annuity is inflation-protected is `r inflationProt`.
+    + Annuity is inflation-protected is `r inflationProtSPIA`.
     + Husband owns Annuity is `r as.logical(spiaOwnerisHusband)`.
-    + Percent of benefit that goes to survivor is `r round(100*survBenefit,2)`%.
-    + SPIA payout rate is `r round(100*annuityPayout,2)`%.
+    + Percent of benefit that goes to survivor is `r round(100*survivorPercentSPIA,2)`%.
+    + SPIA payout rate is `r round(100*spiaPayout,2)`%.
     + SPIA allocation as percent of initial portfolio randomized from `r round(100*min(spiaAllocation),2)`% to `r round(100*max(spiaAllocation),2)`% in 10% increments.
     
 * Deferred Income Annuity (DIA) parameters
@@ -100,7 +100,7 @@ Parameters for the simulations are as follows:
     + DIA payout rate is `r round(100*diaPayout,2)`%.
     + DIA allocation as percent of initial portfolio randomized from `r round(100*min(diaAllocation),2)`% to `r round(100*max(diaAllocation),2)`% in 10% increments.
 * Spending parameters
-    + Expected spending year one of retirement randomized from `r paste("$",prettyNum(min(spendLevels),scientific=FALSE,big.mark=","))` to `r paste("$",prettyNum(max(spendLevels),scientific=FALSE,big.mark=","))`.
+    + Expected spending year one of retirement randomized from `r paste("$",prettyNum(min(unique(initspend)),scientific=FALSE,big.mark=","))` to `r paste("$",prettyNum(max(unique(initspend)),scientific=FALSE,big.mark=","))`.
     + Percent expense decline after death of first spouse is `r round(100*survivorExpense,2)`%.
     + Expenses typically decline `r round(100*annualAdjust,2)`% annually throughout retirement.
     + Desired safety net (floor) spending is `r desiredSafetyNet`
@@ -281,6 +281,8 @@ If an empty chart appears below, then there were no underfunded scenarios.
 
 ```{r echo=FALSE,warning=FALSE}
 
+if (length(unique(initspend)) > 2) {
+
   # Plot spending levels for unmet spending and met-spending scenarios
     hist(initspend[rowSums(round(totalSpending-expenses)) != 0],plot=FALSE,breaks=unique(initspend)) -> h # do a histogram of y and assign its info to h
     h$counts <- cumsum(h$counts)/sum(h$counts) # replace the cell freq.s by cumulative freq.s
@@ -296,13 +298,13 @@ If an empty chart appears below, then there were no underfunded scenarios.
       labs(x="Spending First Year of Retirement", y="Cumulative Percent of Underfunded Years")  +
       scale_y_continuous(labels=scales::percent) +
       ggtitle(paste("Figure 6. Cumulative Histogram of Underfunded\nScenarios by First-Year Spending")) 
-
+}
 ```
 ~~Following is a cumulative histogram showing the equity allocation for `r length(underfundedyears)` underfunded *scenarios*. If no chart appears below, then there were no underfunded years.
 
 ```{r echo=FALSE,warning=FALSE}
 # Plot cumulative Equity allocation levels for unmet spending 
-if (length(unique(equityAllocation)) > 1) {
+if (length(unique(equityAllocation) & unmetSpendIndex > 0) > 1) {
   
   h <- hist(equityAllocation[unmetSpendIndex > 0],plot=FALSE,breaks=unique(equityAllocation)) # do a histogram of y and assign its info to h
   h$counts <- cumsum(h$counts)/sum(h$counts) # replace the cell freq.s by cumulative freq.s
@@ -520,6 +522,8 @@ Though this graph shows 21 paths, the simulation actually generated `r n` hypoth
 ~~
 
 ```{r echo=FALSE,warning=FALSE}
+
+if (sum(percentFunded) < n) {     # plot only if some scenarios are not 100% funded
 plotData.df <- data.frame(percentFunded[percentFunded < 1] * 100)
 pdata <- ggplot (data=plotData.df,aes(plotData.df$percentFunded.percentFunded...1.)) +
   geom_histogram(binwidth = 1,
@@ -531,7 +535,7 @@ pdata <- ggplot (data=plotData.df,aes(plotData.df$percentFunded.percentFunded...
   ggtitle("Figure 9. Histogram of Percent of Years Funded\nfor Underfunded Scenarios") 
 
 print(pdata)
-
+}
 ```
 
 

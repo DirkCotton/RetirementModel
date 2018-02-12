@@ -13,7 +13,7 @@ socialsecurity <- function (household,wifeAge,husbandAge,wifeDOB,husbandDOB,wife
   wifeFRAage <- fraAges$wifeFRAage
   husbandFRAage <- fraAges$husbandFRAage
   
-  ssClaimTable <- buildSocSec(wifeFRAamount,husbandFRAamount,wifeFRAage,husbandFRAage) # ssClaimTable is table of claimg by year
+  ssClaimTable <- buildSocSec(wifeFRAamount,husbandFRAamount,wifeFRAage,husbandFRAage) # ssClaimTable is table of claiming by year
     
 # Change all "4" states to zero, since no one is alive in 4   
   ssClaimStates <- states
@@ -25,7 +25,7 @@ socialsecurity <- function (household,wifeAge,husbandAge,wifeDOB,husbandDOB,wife
     # Return resultsM
   if (household == 2) {
     # Calculate survivor benefits, annualize them, and replace all "1" and "2" states with survivor benefits
-    survivorBenefits <- survivorClaims(states,ssBenM,nscen=length(states[,1]),nyrs=length(states[1,]),wifeAge,husbandAge,wifeFRAage,husbandFRAage,wifeClaimAge,husbandClaimAge) 
+    survivorBenefits <- survivorClaims(states,ssClaimTable,nscen=length(states[,1]),nyrs=length(states[1,]),wifeAge,husbandAge,wifeFRAage,husbandFRAage,wifeClaimAge,husbandClaimAge) 
     ssBenefitsM[ssClaimStates == 3] <- ssClaimTable[wifeClaimAge - 61,2] + ssClaimTable[husbandClaimAge - 61,3]
     ssBenefitsM <- ssBenefitsM + survivorBenefits
       
